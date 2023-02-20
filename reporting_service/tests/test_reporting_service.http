@@ -1,0 +1,10 @@
+### Basic authorization.
+GET http://127.0.0.1/info/
+Accept: application/json
+
+### Basic authorization with variables.
+GET http://127.0.0.1/info/
+Authorization: michele
+Accept: application/json
+
+

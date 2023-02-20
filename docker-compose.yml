@@ -1,0 +1,65 @@
+version: '2'
+services:
+  authentication:
+    extends:
+      file: common.yml
+      service: auth
+
+  reporting:
+    container_name: reporting
+    build:
+      context: reporting_service
+      dockerfile: Dockerfile
+    depends_on:
+      - authentication
+    environment:
+      - AUTHENTICATION_SERVICE=http://host.docker.internal:8080
+    ports:
+      - "8002:80"
+    expose:
+      - 8002
+
+  ocpp:
+    container_name: ocpp16
+    build:
+      context: ocpp_16
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"
+      - "8081:8081"
+      - "8082:8082"
+    expose:
+      - 443
+      - 8081
+      - 8082
+
+
+  postgres:
+    image: postgres
+    container_name: postgres
+    ports:
+      - '6500:5432'
+    restart: always
+    env_file:
+      - auth_service/app/.env
+    volumes:
+      - postgres-db:/var/lib/postgresql/data
+
+
+  frontend:
+    container_name: frontend
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    depends_on:
+      - authentication
+      - ocpp
+    environment:
+      - AUTHENTICATION_SERVICE=http://host.docker.internal:8000
+    ports:
+      - "8001:80"
+    expose:
+      - 8001
+
+volumes:
+  postgres-db:

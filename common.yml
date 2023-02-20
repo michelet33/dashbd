@@ -1,0 +1,10 @@
+services:
+  auth:
+    container_name: authentication
+    build:
+      context: auth_service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    expose:
+      - 8080
