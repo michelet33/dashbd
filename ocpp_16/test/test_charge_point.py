@@ -33,7 +33,7 @@ async def main():
     #     cp = ChargePoint('CP_1', ws)
     #     await asyncio.gather(cp.start(), cp.send_boot_notification())
     async with websockets.connect(
-            'ws://172.28.208.1/ocpp/CP_1',
+            'ws://192.168.1.129/ocpp/CP_1',
             subprotocols=['ocpp1.6']
     ) as ws:
         cp = ChargePoint('CP_1', ws)

@@ -1,1 +1,0 @@
-docker run -d --name=ftp --restart always -p 219:21 -p 21000-21002:21000-21002 -e USERS="userftp|pwdftp|/home/" -v /home/michele/fichiers:/home delfer/alpine-ftp-server

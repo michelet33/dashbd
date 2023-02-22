@@ -1,5 +1,23 @@
+# coding: utf-8
+import os
+from datetime import datetime
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import HTMLResponse
+import websockets
+from ocpp.v16 import call
+from ocpp.v16 import ChargePoint as CP
+import asyncio
+import logging
+from ocpp.v16.enums import RegistrationStatus
+
+now = datetime.now()
+file = now.strftime("%Y%m%d")
+filename= os.path.join(os.getcwd(), f'log/ws_ocpp_{file}.log')
+logging.basicConfig(filename=filename,
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
 
 app = FastAPI()
 
@@ -15,11 +33,12 @@ html = """
         <title>Backend Ocpp</title>
     </head>
     <body class="container">
-        <h1>OCPP : Send message</h1>
+        <h1>Send message OCPP</h1>
         <form action="" onsubmit="sendMessage(event)">
             <div class="row">
                 <div class="col-sm-2">
-                    <select class="form-control">
+                    <label for="SelectProtocol" class="form-label">Version protocol</label>
+                    <select class="form-control" id='protocol' name="SelectProtocol">
                     <option value=1 selected>1.6 JSON</option>
                     <option value=2>1.6 SOAP</option>
                     <option value=3>2.0.1 JSON</option>
@@ -27,36 +46,84 @@ html = """
                 </div>
             </div>
             <div class="row">
-                <div class="col-sm-9">
-                <div class="input-group mb-3">
-                  <textarea class="form-control" placeholder="message" aria-label="Message"
-                  aria-describedby="button-addon2" id="messageText" autocomplete="off"></textarea>
-                  <button class="btn btn-outline-secondary" id="button-addon2">Send</button>
+                <div class="col-sm-2">
+                    <label for="SelectRequest" class="form-label">Type de requête *</label>
+                    <select class="form-control" value=0 id='RequestType' name="SelectRequest" required>
+                    <option value="" selected></option>
+                    <option value="UpdateFirmware">UpdateFirmware</option>
+                    <option value="SendLocalList">SendLocalList</option>
+                    <option value="GetLocalList">GetLocalList</option>
+                    <option value="RemoteStartTransaction">RemoteStartTransaction</option>
+                    <option value="RemoteStopTransaction">RemoteStopTransaction</option>
+                    <option value="CancelReservation">CancelReservation</option>
+                    <option value="ChangeAvailability">ChangeAvailability</option>
+                    <option value="ChangeConfiguration">ChangeConfiguration</option>
+                    <option value="ClearCache">ClearCache</option>
+                    <option value="ClearChargingProfile">ClearChargingProfile</option>
+                    <option value="DataTransfer">DataTransfer</option>
+                    <option value="GetCompositeSchedule">GetCompositeSchedule</option>
+                    <option value="GetConfiguration">GetConfiguration</option>
+                    <option value="GetDiagnostics">GetDiagnostics</option>
+                    <option value="GetLocalListVersion">GetLocalListVersion</option>
+                    <option value="ReserveNow">ReserveNow</option>
+                    <option value="Reset">Reset</option>
+                    <option value="StartTransaction">StartTransaction</option>
+                    <option value="StopTransaction">StopTransaction</option>
+                    <option value="TriggerMessage">TriggerMessage</option>
+                    <option value="UnlockConnector">UnlockConnector</option>
+                    </select>
                 </div>
+            </div>
+            <div class="row">
+                <div class="col-sm-9">
+        
+                   <label for="RequestContent" class="form-label">Requête *</label>
+                  <textarea class="form-control" placeholder="message" aria-label="Message" name='RequestContent'
+                  aria-describedby="button-addon2" id="messageText" autocomplete="off" required></textarea>
+                  <button class="btn btn-outline-secondary" id="button-addon2">Envoyer</button>
+        
                 </div>
             </div>
         </form>
         <ul id='messages'>
         </ul>
         <script>
-            var ws = new WebSocket("ws://localhost:8081/ocpp/ws");
+            var ws = new WebSocket("ws://192.168.1.129:9001/ws", subprotocols=['ocpp1.6']);
             ws.onmessage = function(event) {
-                var messages = document.getElementById('messages')
-                var message = document.createElement('li')
-                var content = document.createTextNode(event.data)
-                message.appendChild(content)
-                messages.appendChild(message)
+                var messages = document.getElementById('messages');
+                var message = document.createElement('li');
+                var content = document.createTextNode(event.data);
+                message.appendChild(content);
+                messages.appendChild(message);
             };
             function sendMessage(event) {
-                var input = document.getElementById("messageText")
-                ws.send(input.value)
-                input.value = ''
-                event.preventDefault()
+                var req = document.getElementById("RequestType").value;
+                var input = document.getElementById("messageText");
+                const data = [];
+                data.push(req+'.req');
+                data.push(input.value);
+                data.push('cbid_default')
+                console.log(data);
+                ws.send(data);
+                input.value = '';
+                event.preventDefault();
             }
         </script>
     </body>
 </html>
 """
+
+# class ChargePoint(CP):
+#     async def send_update_firmware(self, data):
+#         request = call.UpdateFirmwarePayload(
+#             location=data[1]['location'],
+#             retries= 1,
+#             retrieve_date= datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + "Z",
+#             retry_interval = 0
+#         )
+#         response = await self.call(request)
+#         if response.status == RegistrationStatus.accepted:
+#             logging.info("Update firmware sended to backend")
 
 
 @app.get("/central")
@@ -64,9 +131,20 @@ async def get():
     return HTMLResponse(html)
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        await websocket.send_text(f"Message text was: {data}")
+# @app.websocket("/ws")
+# async def websocket_endpoint(websocket: WebSocket):
+#     await websocket.accept()
+#     while True:
+#         data = await websocket.receive_text()
+#         data = data.split(',')
+#         # connect on backend
+#         # send data fo update charge point with package on ftp
+#         async with websockets.connect(
+#                 'ws://192.168.1.129/ocpp/cbid_default',
+#                 subprotocols=['ocpp1.6']
+#         ) as ws:
+#             cp = CP('CP_1', ws)
+#             if data[0]=="Updatefirmware.req":
+#                 await asyncio.gather(cp.start(), cp.send_update_firmware(data[1]))
+#
+#         await websocket.send_text(f"{data[0]}: {data[1]}")

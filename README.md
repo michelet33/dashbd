@@ -1,6 +1,4 @@
-# dashbd
+# Create the images and containers
 
-Requirements: Docker Desktop
-
-Launch command:
+Go to the dir which contains the docker-compose file and launch the command:
 docker-compose up --build

@@ -1,9 +1,24 @@
+# coding: utf-8
+import os
+from datetime import datetime
 from ocpp.v16 import ChargePoint
 import asyncio
+import logging
 
+now = datetime.now()
+file = now.strftime("%Y%m%d")
+filename= os.path.join(os.getcwd(), f'log/ws_ocpp_{file}.log')
+logging.basicConfig(filename=filename,
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
 class CentralSystem:
     def __init__(self):
         self._chargers = {}
+
+    def get_chargers(self) -> dict:
+        return self._chargers
 
     def register_charger(self, cp: ChargePoint) -> asyncio.Queue:
         """ Register a new ChargePoint at the CSMS. The function returns a
@@ -43,3 +58,4 @@ class CentralSystem:
                 return
 
         raise ValueError(f"Charger {id} not connected.")
+

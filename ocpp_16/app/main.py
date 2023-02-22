@@ -1,125 +1,120 @@
-# coding: utf-8
 import os
-from functools import partial
-
-# import uvicorn
-# from fastapi import FastAPI
-import asyncio
-import websockets
 import logging
-from aiohttp import web
-from dotenv import load_dotenv
-# import models.Central_System as CS
+import asyncio
+import uvicorn
+# from enums import OcppMisc as oc
+# from ocpp.routing import on
+# from ocpp.v16 import ChargePoint as cp
+# from ocpp.v16.enums import Action, RegistrationStatus, AuthorizationStatus, ResetType, ResetStatus
+# from ocpp.v16 import call_result, call
+from datetime import datetime
+from fastapi import Body, FastAPI, status, Request, WebSocket, Depends
 from models.Central_System import CentralSystem
 from models.Charge_Point_16 import ChargePoint16
-# from api.request import ws
 
-# app = FastAPI()
-# app.include_router(ws)
-
-load_dotenv('.env')
-filename= os.path.join(os.getcwd(), 'ws_ocpp.log')
+app = FastAPI()
+now = datetime.now()
+file = now.strftime("%Y%m%d")
+filename= os.path.join(os.getcwd(), f'log/ws_ocpp_{file}.log')
 logging.basicConfig(filename=filename,
                     filemode='a',
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%H:%M:%S',
                     level=logging.DEBUG)
 
-async def on_connect(websocket, path, csms: CentralSystem):
-    """ For every new charge point that connects, create a ChargePoint instance
-    and start listening for messages.
+csms = CentralSystem()
 
-    The ChargePoint is registered at the CSMS.
+# class ChargePoint(cp):
+#
+#     @on(Action.Heartbeat)  # this is an OCPP function, not important here
+#     async def on_HB(self):
+#         print("heart beat received from chargepoint")
+#         return call_result.HeartbeatPayload(current_time=datetime.utcnow().isoformat()
+#
+#     async def reset(self, type: ResetType):
+#         return await self.call(call.ResetPayload(type=type))
 
-    """
-    try:
-        requested_protocols = websocket.request_headers["Sec-WebSocket-Protocol"]
-    except KeyError:
-        logging.error("Client hasn't requested any Subprotocol. Closing Connection")
-        return await websocket.close()
-    if websocket.subprotocol:
-        logging.info("Protocols Matched: %s", websocket.subprotocol)
-    else:
-        # In the websockets lib if no subprotocols are supported by the
-        # client and the server, it proceeds without a subprotocol,
-        # so we have to manually close the connection.
-        logging.warning(
-            "Protocols Mismatched | Expected Subprotocols: %s,"
-            " but client supports  %s | Closing connection",
-            websocket.available_subprotocols,
-            requested_protocols,
-        )
-        return await websocket.close()
-    charge_point_id = path.strip("/").split('/')
-    charge_point_id= charge_point_id[len(charge_point_id)-1]
-    cp = ChargePoint16(charge_point_id, websocket)
-    print(f"Charger {cp.id} connected.")
-    logging.info(f"Charger {cp.id} connected.")
-    # If this handler returns the connection will be destroyed. Therefore we need some
-    # synchronization mechanism that blocks until CSMS wants to close the connection.
-    # An `asyncio.Queue` is used for that.
-    queue = csms.register_charger(cp)
+
+# class CentralSystem:
+#     def __init__(self):
+#         self._chargers = {}
+#
+#     def register_charger(self, cp: ChargePoint):
+#         queue = asyncio.Queue(maxsize=1)
+#         task = asyncio.create_task(self.start_charger(cp, queue))
+#         self._chargers[cp] = task  # here I store the charger websocket incoming connection as cp task
+#         print(self._chargers)
+#         return queue
+#
+#     async def start_charger(self, cp, queue):
+#         try:
+#             await cp.start()
+#         except Exception as error:
+#             print(f"Charger {cp.id} disconnected: {error}")
+#         finally:
+#             del self._chargers[cp]
+#             await queue.put(True)
+#
+#     async def reset_fun(self, cp_id: str, rst_type: str):
+#         print(self._chargers.items())  # Now over here i see that _chargers is empty !!! why?
+#         for cp, task in self._chargers.items():
+#             print(cp.id)
+#             if cp.id == cp_id:
+#                 print("reached here")
+#                 await cp.reset(rst_type)
+
+
+class SocketAdapter:
+    def __init__(self, websocket: WebSocket):
+        self._ws = websocket
+
+    async def recv(self) -> str:
+        return await self._ws.receive_text()
+
+    async def send(self, msg) -> str:
+        await self._ws.send_text(msg)
+
+
+@app.websocket("/ocpp/{client_id}")
+async def websocket_endpoint(websocket: WebSocket, client_id: str, csms: CentralSystem = Depends(CentralSystem)):
+    await websocket.accept(subprotocol='ocpp1.6')
+    charge_point_id = websocket.url.path.strip('/')
+    cp_id = charge_point_id[len(charge_point_id) - 1]
+    cp = ChargePoint16(cp_id, SocketAdapter(websocket))
+    logging.info(f"charger {cp.id} connected.")
+
+    queue = csms.register_charger(
+        cp)  # here i use the register_charger funtion to save the charge point class based websocket instance.
     await queue.get()
 
+@app.websocket("/ws")
+async def websocket_frontendpoint(websocket: WebSocket):
+    await websocket.accept(subprotocol='ocpp1.6')
+    while True:
+        data = await websocket.receive_text()
+        data = data.split(',')
+        cps = csms.get_chargers()
+        # cp = ChargePoint16()
+        logging.info(cps)
+        # find charger
+        for e in enumerate(cps):
+            cp = cps[e]
+            logging.log(data[2])
+            logging.log(cp.id)
+            if cp.id == data[2]:
+                logging.info('UPDATE FIRMWARE step1')
+                await cp.send_update_firmware(data)
+                break
 
-async def change_config(request):
-    """ HTTP handler for changing configuration of all charge points. """
+@app.post("/reset")
+async def reset(request: Request, cms: CentralSystem = Depends(CentralSystem)):
     data = await request.json()
-    csms = request.app["csms"]
+    logging.info(f"API DATA to confirm {data}")
+    get_response = await cms.reset_fun(data["cp_id"], data[
+        "type"])  # here i call the reset_fun but as inside it there is no charger stored inside _chargers it gets no response.
+    logging.info(f"==> The response from charger==> {get_response}")
+    return "sucess"
 
-    await csms.change_configuration(data["key"], data["value"])
-
-    return web.Response()
-
-
-async def disconnect_charger(request):
-    """ HTTP handler for disconnecting a charger. """
-    data = await request.json()
-    csms = request.app["csms"]
-
-    try:
-        csms.disconnect_charger(data["id"])
-    except ValueError as e:
-        print(f"Failed to disconnect charger: {e}")
-        return web.Response(status=404)
-
-    return web.Response()
-
-async def create_websocket_server(csms: CentralSystem):
-    handler = partial(on_connect, csms=csms)
-    server = os.getenv('BACKEND_HOST')
-    port = os.getenv('BACKEND_PORT')
-    version= os.getenv('PROTOCOLE')
-    return await websockets.serve(handler, server, port, subprotocols=[version])
-
-#
-# async def create_http_server(csms: CentralSystem):
-#
-#     server = os.getenv('BACKEND_HOST')
-#     port = os.getenv('BACKEND_PORT')
-#     application = web.Application()
-#     application.add_routes([web.post("/ws", websocket_endpoint)])
-#     application.add_routes([web.post("/disconnect", disconnect_charger)])
-#     application.add_routes([web.post("/ocpp", change_config)])
-#
-#     # Put CSMS in app so it can be accessed from request handlers.
-#     application["csms"] = csms
-#
-#     runner = web.AppRunner(application)
-#     await runner.setup()
-#
-#     site = web.TCPSite(runner, server, port)
-#     return site
-
-async def main():
-    server = os.getenv('HTTP_SERVER')
-    port = int(os.getenv('SERVER_PORT'))
-    csms = CentralSystem()
-    websocket_server = await create_websocket_server(csms)
-    # http_server = await create_http_server(csms)
-    # await asyncio.wait([websocket_server.wait_closed(), http_server.start()])
-    # await asyncio.wait([websocket_server.wait_closed(), uvicorn.run(app, host=server, port=port)])
-    await websocket_server.wait_closed()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    uvicorn.run(app, host='192.168.1.129', port=9001)
