@@ -1,23 +1,19 @@
 # coding: utf-8
-import os
-from datetime import datetime
-from fastapi import FastAPI, WebSocket
+# import os
+# from datetime import datetime
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-import websockets
-from ocpp.v16 import call
-from ocpp.v16 import ChargePoint as CP
-import asyncio
-import logging
-from ocpp.v16.enums import RegistrationStatus
+# import logging
 
-now = datetime.now()
-file = now.strftime("%Y%m%d")
-filename= os.path.join(os.getcwd(), f'log/ws_ocpp_{file}.log')
-logging.basicConfig(filename=filename,
-                    filemode='a',
-                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
-                    datefmt='%H:%M:%S',
-                    level=logging.DEBUG)
+
+# now = datetime.now()
+# file = now.strftime("%Y%m%d")
+# filename= os.path.join(os.getcwd(), f'log/ws_ocpp_{file}.log')
+# logging.basicConfig(filename=filename,
+#                     filemode='a',
+#                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+#                     datefmt='%H:%M:%S',
+#                     level=logging.DEBUG)
 
 app = FastAPI()
 
@@ -37,11 +33,10 @@ html = """
         <form action="" onsubmit="sendMessage(event)">
             <div class="row">
                 <div class="col-sm-2">
-                    <label for="SelectProtocol" class="form-label">Version protocol</label>
+                    <label for="SelectProtocol" class="form-label">Version protocole</label>
                     <select class="form-control" id='protocol' name="SelectProtocol">
-                    <option value=1 selected>1.6 JSON</option>
-                    <option value=2>1.6 SOAP</option>
-                    <option value=3>2.0.1 JSON</option>
+                    <option value='ocpp1.6' selected>1.6 JSON</option>
+                    <option value='ocpp2.0.1'>2.0.1 JSON</option>
                     </select>
                 </div>
             </div>
@@ -76,8 +71,7 @@ html = """
             </div>
             <div class="row">
                 <div class="col-sm-9">
-        
-                   <label for="RequestContent" class="form-label">Requête *</label>
+                <label for="RequestContent" class="form-label">Message json *</label>
                   <textarea class="form-control" placeholder="message" aria-label="Message" name='RequestContent'
                   aria-describedby="button-addon2" id="messageText" autocomplete="off" required></textarea>
                   <button class="btn btn-outline-secondary" id="button-addon2">Envoyer</button>
@@ -99,12 +93,12 @@ html = """
             function sendMessage(event) {
                 var req = document.getElementById("RequestType").value;
                 var input = document.getElementById("messageText");
-                const data = [];
-                data.push(req+'.req');
-                data.push(input.value);
-                data.push('cbid_default')
+                var data = {};
+                data["action"]=req;
+                data["content"]=input.value;
+                data["charger"]='cbid_default';
                 console.log(data);
-                ws.send(data);
+                ws.send(JSON.stringify(data));
                 input.value = '';
                 event.preventDefault();
             }
@@ -113,38 +107,6 @@ html = """
 </html>
 """
 
-# class ChargePoint(CP):
-#     async def send_update_firmware(self, data):
-#         request = call.UpdateFirmwarePayload(
-#             location=data[1]['location'],
-#             retries= 1,
-#             retrieve_date= datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + "Z",
-#             retry_interval = 0
-#         )
-#         response = await self.call(request)
-#         if response.status == RegistrationStatus.accepted:
-#             logging.info("Update firmware sended to backend")
-
-
 @app.get("/central")
 async def get():
     return HTMLResponse(html)
-
-
-# @app.websocket("/ws")
-# async def websocket_endpoint(websocket: WebSocket):
-#     await websocket.accept()
-#     while True:
-#         data = await websocket.receive_text()
-#         data = data.split(',')
-#         # connect on backend
-#         # send data fo update charge point with package on ftp
-#         async with websockets.connect(
-#                 'ws://192.168.1.129/ocpp/cbid_default',
-#                 subprotocols=['ocpp1.6']
-#         ) as ws:
-#             cp = CP('CP_1', ws)
-#             if data[0]=="Updatefirmware.req":
-#                 await asyncio.gather(cp.start(), cp.send_update_firmware(data[1]))
-#
-#         await websocket.send_text(f"{data[0]}: {data[1]}")

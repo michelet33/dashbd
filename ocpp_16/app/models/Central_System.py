@@ -51,11 +51,10 @@ class CentralSystem:
         for cp in self._chargers:
             await cp.change_configuration(key, value)
 
-    def disconnect_charger(self, id: str):
+    def disconnect_charger(self, ident: str):
         for cp, task in self._chargers.items():
-            if cp.id == id:
+            if cp.id == ident:
                 task.cancel()
                 return
 
-        raise ValueError(f"Charger {id} not connected.")
-
+        raise ValueError(f"Charger {ident} not connected.")

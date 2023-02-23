@@ -1,10 +1,10 @@
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from api.v1.auth_service import auth
 from db.create_tables import tables
-
+from db.database import SessionLocal
+from api.v1.services import auth
 
 app = FastAPI()
 # origins = [
@@ -27,6 +27,16 @@ app = FastAPI()
 app.include_router(auth)
 app.include_router(tables)
 
+@app.middleware("http")
+async def db_session_middleware(request: Request, call_next):
+    response = Response("Internal server error", status_code=500)
+    try:
+        request.state.db = SessionLocal()
+        response = await call_next(request)
+    finally:
+        request.state.db.close()
+    return response
+
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=80)
+    uvicorn.run(app, host="192.168.1.129", port=5000)

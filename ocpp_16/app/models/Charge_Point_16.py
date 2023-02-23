@@ -1,12 +1,13 @@
 # coding: utf-8
+import json
 import os
 from datetime import datetime
-from ocpp.routing import on
+from ocpp.routing import on, after
 from ocpp.v16 import ChargePoint as CP
 from ocpp.v16.enums import Action, RegistrationStatus, RemoteStartStopStatus
 from ocpp.v16 import call_result, call
 import logging
-
+from . import utils
 
 now = datetime.now()
 file = now.strftime("%Y%m%d")
@@ -29,6 +30,14 @@ class ChargePoint16(CP):
             status=RegistrationStatus.accepted
         )
 
+    @after(Action.BootNotification)
+    async def after_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
+        data = {"charger_id": self.id,
+         "action": "BootNotification",
+         "content": "{'charge_point_vendor': '"+charge_point_vendor+"', 'charge_point_model': '"+charge_point_model+"'}"
+                }
+        await utils.save_log(data)
+
     @on(Action.Heartbeat)
     async def on_heartbeat(self):
         return call_result.HeartbeatPayload(
@@ -43,6 +52,12 @@ class ChargePoint16(CP):
                 "status": "Accepted"
             }
         )
+    @after(Action.Authorize)
+    async def after_on_authorize(self, id_tag):
+        data = {"charger_id": self.id,
+                "action": "Authorize",
+                "content": "{'idtag': '" + id_tag + "'}"}
+        await utils.save_log(data)
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, timestamp, meter_start, reservation_id):
@@ -72,29 +87,26 @@ class ChargePoint16(CP):
         )
 
     async def send_update_firmware(self, data):
+        jsondata = json.loads(data)
         request = call.UpdateFirmwarePayload(
-            location=data[1]['location'],
-            retries= 1,
-            retrieve_date= datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + "Z",
-            retry_interval = 0
+            location=jsondata['location'],
+            retries= jsondata['retries'],
+            retrieve_date= jsondata['retrieveDate'],
+            retry_interval = jsondata['retryInterval']
         )
+        # datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + "Z"
         logging.info('UPDATE FIRMWARE step 2')
         logging.info(request)
-        response = await self.call(request)
-        if response.status == RegistrationStatus.accepted:
-            logging.info("Update firmware accepted")
+        await self.call(request)
+        # if response.status == RegistrationStatus.accepted:
+        logging.info("Update firmware accepted")
 
-    # async def on_update_firmware(self, location, retries, retrieveDate, retryInterval):
-    #     return call.UpdateFirmwarePayload(
-    #         location=location,
-    #         retries=retries,
-    #         retrieve_date=retrieveDate,
-    #         retry_interval=retryInterval
-    #     )
-    #     logging.info(f'Request package url:{location}')
-    #     response = await self.call(request)
-    #     if response.status == RegistrationStatus.accepted:
-    #         logging.info("Update firmware accepted")
+        data = {"charger_id": self.id,
+                "action": "UpdateFirmware",
+                "content": "{'location': '"+ str(jsondata['location']) +"', 'retries': "+
+                           str(jsondata['retries'])+", 'retrieveDate':'"+str(jsondata['retrieveDate'])+
+                           "', 'retryInterval':"+str(jsondata['retryInterval'])+"}"}
+        await utils.save_log(data)
 
     @on(Action.FirmwareStatusNotification)
     async def on_firmware_status_notification(self, status):
@@ -105,6 +117,12 @@ class ChargePoint16(CP):
         else:
             return call_result.FirmwareStatusNotificationPayload(status='Rejected')
 
+    @after(Action.FirmwareStatusNotification)
+    async def after_firmware_status_notification(self, status):
+        data = {"charger_id": self.id,
+                "action": "FirmwareStatusNotification",
+                "content": "{'status': '" + str(status) + "'}"}
+        await utils.save_log(data)
     async def remote_start_transaction(self):
         request = call.RemoteStartTransactionPayload(
             id_tag='1'
