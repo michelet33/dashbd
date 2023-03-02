@@ -1,3 +1,4 @@
+from sqlalchemy.orm import relationship, Mapped
 from ..database import Base
 from sqlalchemy import TIMESTAMP, Column, String, Boolean, Integer
 from sqlalchemy.sql import func
@@ -18,6 +19,7 @@ class Tags(Base):
     user_updated = Column(String(75), unique=False)
     updated_at = Column(TIMESTAMP(timezone=True),
                        default=None, onupdate=func.now())
+    # children: Mapped[List["Params"]] = relationship(back_populates="parent")
 
 class TagsModel(BaseModel):
     id: str
@@ -34,4 +36,4 @@ class TagsModel(BaseModel):
 class ListTags(BaseModel):
     status: str
     results: int
-    notes: List[TagsModel]
+    tags: List[TagsModel]

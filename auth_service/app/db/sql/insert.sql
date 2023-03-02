@@ -1,0 +1,25 @@
+insert into tags (name) values ('ocpp1.6'), ('ocpp2.0.1');
+
+insert into params(name, content, "order", id_tags, valid)
+values
+('UpdateFirmware','{"location":"", "retries":1, "retrieveDate":"","retryInterval":0}',1,1, true)
+,('SendLocalList','',2,1, true)
+,('GetLocalList','',3,1, true)
+,('RemoteStartTransaction','',4,1, true)
+,('RemoteStopTransaction','',5,1, true)
+,('CancelReservation','',6,1, true)
+,('ChangeAvailability','',7,1, true)
+,('ChangeConfiguration','',8,1, true)
+,('ClearCache','',9,1, true)
+,('ClearChargingProfile','',10,1, true)
+,('DataTransfer','',11,1, true)
+,('GetCompositeSchedule','',12,1, true)
+,('GetConfiguration','',13,1, true)
+,('GetDiagnostics','',14,1, true)
+,('GetLocalListVersion','',15,1, true)
+,('ReserveNow','',16,1, true)
+,('Reset','',17,1, true)
+,('StartTransaction','',18,1, true)
+,('StopTransaction','',19,1, true)
+,('TriggerMessage','',20,1, true)
+,('UnlockConnector','',21,1, true);

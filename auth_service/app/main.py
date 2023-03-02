@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db.create_tables import tables
 from db.database import SessionLocal
 from api.v1.services import auth
+from api.v1.charger_services import charger
 
 app = FastAPI()
 # origins = [
@@ -25,6 +26,7 @@ app = FastAPI()
 # TODO to avoid csrftokenError
 
 app.include_router(auth)
+app.include_router(charger)
 app.include_router(tables)
 
 @app.middleware("http")

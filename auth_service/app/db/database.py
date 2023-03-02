@@ -16,7 +16,7 @@ if settings.DATABASE_TYPE == 'SQLITE':
     DB_URL = f"sqlite:///{DB}"
 
 engine = create_engine(
-    DB_URL, echo=True
+    DB_URL, echo=True, connect_args={"check_same_thread": False}
 )
 if settings.DATABASE_TYPE == 'POSTGRES':
     setup_guids_postgresql(engine)
@@ -24,7 +24,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+
 def get_db(request: Request):
+    # store arbitrary objects attached to the request itself, like the database session in this case
     return request.state.db
 
 # def get_db():
