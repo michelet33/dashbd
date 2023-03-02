@@ -4,6 +4,7 @@ from datetime import datetime
 from ocpp.v16 import ChargePoint
 import asyncio
 import logging
+from . import utils
 
 now = datetime.now()
 file = now.strftime("%Y%m%d")
@@ -13,6 +14,7 @@ logging.basicConfig(filename=filename,
                     format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
                     datefmt='%H:%M:%S',
                     level=logging.DEBUG)
+
 class CentralSystem:
     def __init__(self):
         self._chargers = {}
@@ -20,7 +22,7 @@ class CentralSystem:
     def get_chargers(self) -> dict:
         return self._chargers
 
-    def register_charger(self, cp: ChargePoint) -> asyncio.Queue:
+    async def register_charger(self, cp: ChargePoint) -> asyncio.Queue:
         """ Register a new ChargePoint at the CSMS. The function returns a
         queue.  The CSMS will put a message on the queue if the CSMS wants to
         close the connection.
@@ -30,6 +32,12 @@ class CentralSystem:
         # Store a reference to the task so we can cancel it later if needed.
         task = asyncio.create_task(self.start_charger(cp, queue))
         self._chargers[cp] = task
+
+        # save
+        data = {"charger_id": cp.id,
+                "charge_point_model": "",
+                "charge_point_vendor": ""}
+        await utils.save_charger(data)
 
         return queue
 

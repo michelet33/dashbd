@@ -4,9 +4,11 @@ import os
 import logging
 import uvicorn
 from datetime import datetime
+import websockets.connection
 from fastapi import FastAPI, WebSocket, Depends
 from models.Central_System import CentralSystem
 from models.Charge_Point_16 import ChargePoint16
+import requests
 
 app = FastAPI()
 now = datetime.now()
@@ -36,18 +38,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 # async def websocket_endpoint(websocket: WebSocket, client_id: str, csms: CentralSystem = Depends(CentralSystem)):
     await websocket.accept(subprotocol='ocpp1.6')
     charge_point_id = websocket.url.path.split('/')
-    # logging.info(charge_point_id)
     cp_id = charge_point_id[len(charge_point_id) - 1]
     chargers = csms.get_chargers()
     if cp_id not in chargers.keys():
         cp = ChargePoint16(cp_id, SocketAdapter(websocket))
         logging.info(f"charger {cp.id} connected : {client_id}")
         # use the register_charger funtion to save the charge point class based websocket instance.
-        queue = csms.register_charger(cp)
+        queue = await csms.register_charger(cp)
         await queue.get()
 
 @app.websocket("/ws")
 async def websocket_frontendpoint(websocket: WebSocket):
+    # await websocket.accept()
     await websocket.accept(subprotocol='ocpp1.6')
     while True:
         data = await websocket.receive_text()
@@ -55,7 +57,6 @@ async def websocket_frontendpoint(websocket: WebSocket):
         data = json.loads(data)
         logging.info(data)
         chargers = csms.get_chargers()
-
         logging.info(csms)
         logging.info(chargers.items)
         for cp, task in chargers.items():
@@ -63,19 +64,49 @@ async def websocket_frontendpoint(websocket: WebSocket):
             logging.info(cp.id)
             if cp.id == data["charger"]:
                 logging.info('UPDATE FIRMWARE step1')
+                logging.info(data['content'])
                 await cp.send_update_firmware(data['content'])
                 await websocket.send_text(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {data['action']}: "
                                           f"{data['content']}")
                 break
 
-# @app.post("/reset")
-# async def reset(request: Request, cms: CentralSystem = Depends(CentralSystem)):
-#     data = await request.json()
-#     logging.info(f"API DATA to confirm {data}")
-#     get_response = await cms.reset_fun(data["cp_id"], data[
-#         "type"])  # here I call the reset_fun but as inside it there is no charger stored inside _chargers it gets no response.
-#     logging.info(f"==> The response from charger==> {get_response}")
-#     return "sucess"
+@app.websocket("/ws2")
+async def websocket_robotfw(websocket: WebSocket):
+    await websocket.accept()
+    # await websocket.accept(subprotocol='ocpp1.6')
+    while True:
+        data = await websocket.receive_text()
+        data = json.loads(data)
+        logging.info(data)
+        chargers = csms.get_chargers()
+        logging.info(csms)
+        logging.info(chargers.items)
+        for cp, task in chargers.items():
+            logging.info(data['charger'])
+            logging.info(cp.id)
+            if cp.id == data['charger']:
+                logging.info('UPDATE FIRMWARE step1')
+                logging.info(data['content'])
+                await cp.send_update_firmware(data['content'])
+                await websocket.send_text("Accepted")
+                break
+    await websockets.connection.CLOSED
+
+@app.on_event("startup")
+async def startup_event():
+    # print('startup')
+    LOGIN_ENDPOINT = "http://192.168.1.129:5000/"
+    # LOGIN_ENDPOINT = "http://127.0.0.1:5000/"
+    url = os.path.join(LOGIN_ENDPOINT, 'chargers/invalid/')
+    requests.packages.urllib3.disable_warnings()
+    response = requests.post(
+        url=url,
+        timeout=30,
+        verify=False
+    )
+    response.raise_for_status()
+    # print(response.content)
+
 
 
 if __name__ == '__main__':

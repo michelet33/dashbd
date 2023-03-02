@@ -6,6 +6,7 @@ from ocpp.routing import on, after
 from ocpp.v16 import ChargePoint as CP
 from ocpp.v16.enums import Action, RegistrationStatus, RemoteStartStopStatus
 from ocpp.v16 import call_result, call
+from ocpp.messages import unpack
 import logging
 from . import utils
 
@@ -22,6 +23,27 @@ class ChargePoint16(CP):
     # def __init__(self):
     #     self._chargers = {}
 
+    async def route_message(self, raw_msg):
+        # super of function route_message in order to get unique id
+        await super().route_message(raw_msg)
+        # print(raw_msg)
+        message = unpack(raw_msg)
+        data = {"charger_id": self.id,
+                "message_type_id": message.message_type_id,
+                "unique_id": message.unique_id,
+                "action": message.action,
+                "content": str(message.payload)}
+        await utils.save_log(data)
+
+    async def _send(self, message):
+        await super()._send(message)
+        msg = unpack(message)
+        data = {"charger_id": self.id,
+                "message_type_id": msg.message_type_id,
+                "unique_id": msg.unique_id,
+                "action": msg.action,
+                "content": str(msg.payload)}
+        await utils.save_log(data)
     @on(Action.BootNotification)
     async def on_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
         return call_result.BootNotificationPayload(
@@ -30,13 +52,13 @@ class ChargePoint16(CP):
             status=RegistrationStatus.accepted
         )
 
-    @after(Action.BootNotification)
-    async def after_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
-        data = {"charger_id": self.id,
-         "action": "BootNotification",
-         "content": "{'charge_point_vendor': '"+charge_point_vendor+"', 'charge_point_model': '"+charge_point_model+"'}"
-                }
-        await utils.save_log(data)
+    # @after(Action.BootNotification)
+    # async def after_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
+    #     data = {"charger_id": self.id,
+    #      "action": "BootNotification",
+    #      "content": "{'charge_point_vendor': '"+charge_point_vendor+"', 'charge_point_model': '"+charge_point_model+"'}"
+    #             }
+    #     await utils.save_log(data)
 
     @on(Action.Heartbeat)
     async def on_heartbeat(self):
@@ -52,12 +74,12 @@ class ChargePoint16(CP):
                 "status": "Accepted"
             }
         )
-    @after(Action.Authorize)
-    async def after_on_authorize(self, id_tag):
-        data = {"charger_id": self.id,
-                "action": "Authorize",
-                "content": "{'idtag': '" + id_tag + "'}"}
-        await utils.save_log(data)
+    # @after(Action.Authorize)
+    # async def after_on_authorize(self, id_tag):
+    #     data = {"charger_id": self.id,
+    #             "action": "Authorize",
+    #             "content": "{'idtag': '" + id_tag + "'}"}
+    #     await utils.save_log(data)
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, timestamp, meter_start, reservation_id):
@@ -77,7 +99,7 @@ class ChargePoint16(CP):
         return call_result.MeterValuesPayload()
 
     @on(Action.StatusNotification)
-    async def on_status_notification(self, connector_id, error_code, status):
+    async def on_status_notification(self, connector_id, error_code, status,timestamp, **kwargs):
         return call_result.StatusNotificationPayload()
 
     @on(Action.DataTransfer)
@@ -99,30 +121,27 @@ class ChargePoint16(CP):
         logging.info(request)
         await self.call(request)
         # if response.status == RegistrationStatus.accepted:
-        logging.info("Update firmware accepted")
-
-        data = {"charger_id": self.id,
-                "action": "UpdateFirmware",
-                "content": "{'location': '"+ str(jsondata['location']) +"', 'retries': "+
-                           str(jsondata['retries'])+", 'retrieveDate':'"+str(jsondata['retrieveDate'])+
-                           "', 'retryInterval':"+str(jsondata['retryInterval'])+"}"}
-        await utils.save_log(data)
+        # logging.info("Update firmware accepted")
+        #
+        # data = {"charger_id": self.id,
+        #         "action": "UpdateFirmware",
+        #         "content": "{'location': '"+ str(jsondata['location']) +"', 'retries': "+
+        #                    str(jsondata['retries'])+", 'retrieveDate':'"+str(jsondata['retrieveDate'])+
+        #                    "', 'retryInterval':"+str(jsondata['retryInterval'])+"}"}
+        # await utils.save_log(data)
 
     @on(Action.FirmwareStatusNotification)
     async def on_firmware_status_notification(self, status):
-        if status in (call.FirmwareStatus.downloaded, call.FirmwareStatus.downloading,
-                      call.FirmwareStatus.downloadFailed, call.FirmwareStatus.idle, call.FirmwareStatus.installing,
-                      call.FirmwareStatus.installation_failed, call.FirmwareStatus.installed):
-            return call_result.FirmwareStatusNotificationPayload(status='Accepted')
-        else:
-            return call_result.FirmwareStatusNotificationPayload(status='Rejected')
+        return call_result.FirmwareStatusNotificationPayload()
 
-    @after(Action.FirmwareStatusNotification)
-    async def after_firmware_status_notification(self, status):
-        data = {"charger_id": self.id,
-                "action": "FirmwareStatusNotification",
-                "content": "{'status': '" + str(status) + "'}"}
-        await utils.save_log(data)
+    # @after(Action.FirmwareStatusNotification)
+    # async def after_firmware_status_notification(self, status):
+    #     # print(self.call.unique_id)
+    #     data = {"charger_id": self.id,
+    #             "unique_id": '',
+    #             "action": "FirmwareStatusNotification",
+    #             "content": "{'status': '" + str(status) + "'}"}
+    #     await utils.save_log(data)
     async def remote_start_transaction(self):
         request = call.RemoteStartTransactionPayload(
             id_tag='1'
