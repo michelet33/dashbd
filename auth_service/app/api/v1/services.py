@@ -20,7 +20,7 @@ def login(
 def add_log(d= Body(), db: Session = Depends(get_db)):
     print(d)
     if len(d)>0:
-        db_log = Logs(charger_id=d['charger_id'], action=d['action'], content=d['content'])
+        db_log = Logs(charger_id=d['charger_id'],message_type_id=d['message_type_id'], action=d['action'], content=d['content'], unique_id=d['unique_id'])
         db.add(db_log)
         db.commit()
         # db.refresh(db_log)
