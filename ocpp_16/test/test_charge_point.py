@@ -7,7 +7,7 @@ import logging
 import websockets
 from ocpp.v16 import call, call_result
 from ocpp.v16 import ChargePoint as CP
-from ocpp.v16.enums import Action
+from ocpp.v16.enums import Action, TriggerMessageStatus
 logging.getLogger('ocpp').setLevel(level=logging.DEBUG)
 logging.getLogger('ocpp').addHandler(logging.StreamHandler())
 import shutil
@@ -22,6 +22,11 @@ class ChargePoint(CP):
         response = await self.call(request)
         if response.status == RegistrationStatus.accepted:
             logging.info("Connected to central system.")
+
+
+    @on(Action.TriggerMessage)
+    async def on_trigger_message(self, requested_message:str):
+        return call_result.TriggerMessagePayload(status=TriggerMessageStatus.accepted)
 
     @on(Action.UpdateFirmware)
     async def on_update_firmware(self, location:str, retries:int, retrieve_date:str, retry_interval:int):

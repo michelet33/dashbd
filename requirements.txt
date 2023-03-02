@@ -24,3 +24,4 @@ watchfiles==0.18.1
 websockets==10.4
 ocpp~=0.17.0
 aiohttp~=3.8.4
+jsonify~=0.5

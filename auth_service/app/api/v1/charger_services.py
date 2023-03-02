@@ -57,10 +57,10 @@ def invalid_all_chargers(db: Session = Depends(get_db)):
     chargers = db.query(Chargers).filter(Chargers.valid == 1)
     if chargers:
         for c in chargers:
-            print(c)
-            # c.valid = False
-            # c.updated_at = datetime.datetime.now()
-            # db.commit()
+            # print(c)
+            c.valid = False
+            c.updated_at = datetime.datetime.now()
+            db.commit()
 
 # def get_charger(charger_id, db: Session = Depends(get_db)) -> Chargers:
 #     return db.query(Chargers).filter(Chargers.charger_id == charger_id).first()

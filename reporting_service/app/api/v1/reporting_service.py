@@ -5,10 +5,8 @@ from ..utils import auth_required
 
 report = APIRouter()
 
-
 @report.get("/info/")
 @auth_required
 def get_information(
-   authorization: Optional[str] = Header(None)
 ) -> JSONResponse:
     return JSONResponse(content={"info": "The answer is 42."})

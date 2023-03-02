@@ -1,4 +1,5 @@
 # coding: utf-8
+import inspect
 import os
 from datetime import datetime
 from ocpp.v16 import ChargePoint
@@ -32,7 +33,6 @@ class CentralSystem:
         # Store a reference to the task so we can cancel it later if needed.
         task = asyncio.create_task(self.start_charger(cp, queue))
         self._chargers[cp] = task
-
         # save
         data = {"charger_id": cp.id,
                 "charge_point_model": "",

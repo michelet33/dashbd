@@ -8,6 +8,8 @@ import websockets.connection
 from fastapi import FastAPI, WebSocket, Depends
 from models.Central_System import CentralSystem
 from models.Charge_Point_16 import ChargePoint16
+from ocpp.v16 import call
+from ocpp.v16.enums import MessageTrigger
 import requests
 
 app = FastAPI()
@@ -45,6 +47,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         logging.info(f"charger {cp.id} connected : {client_id}")
         # use the register_charger funtion to save the charge point class based websocket instance.
         queue = await csms.register_charger(cp)
+        # save
+        status = [MessageTrigger.status_notification,
+                  MessageTrigger.firmware_status_notification,
+                  MessageTrigger.diagnostics_status_notification,
+                  MessageTrigger.firmware_status_notification,
+                  MessageTrigger.boot_notification,
+                  MessageTrigger.meter_values]
+        for s in status:
+            request = call.TriggerMessagePayload(
+                requested_message=s
+            )
+            await cp.call(request)
         await queue.get()
 
 @app.websocket("/ws")

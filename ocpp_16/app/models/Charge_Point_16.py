@@ -52,14 +52,6 @@ class ChargePoint16(CP):
             status=RegistrationStatus.accepted
         )
 
-    # @after(Action.BootNotification)
-    # async def after_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
-    #     data = {"charger_id": self.id,
-    #      "action": "BootNotification",
-    #      "content": "{'charge_point_vendor': '"+charge_point_vendor+"', 'charge_point_model': '"+charge_point_model+"'}"
-    #             }
-    #     await utils.save_log(data)
-
     @on(Action.Heartbeat)
     async def on_heartbeat(self):
         return call_result.HeartbeatPayload(
@@ -74,12 +66,6 @@ class ChargePoint16(CP):
                 "status": "Accepted"
             }
         )
-    # @after(Action.Authorize)
-    # async def after_on_authorize(self, id_tag):
-    #     data = {"charger_id": self.id,
-    #             "action": "Authorize",
-    #             "content": "{'idtag': '" + id_tag + "'}"}
-    #     await utils.save_log(data)
 
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, timestamp, meter_start, reservation_id):
@@ -120,28 +106,11 @@ class ChargePoint16(CP):
         logging.info('UPDATE FIRMWARE step 2')
         logging.info(request)
         await self.call(request)
-        # if response.status == RegistrationStatus.accepted:
-        # logging.info("Update firmware accepted")
-        #
-        # data = {"charger_id": self.id,
-        #         "action": "UpdateFirmware",
-        #         "content": "{'location': '"+ str(jsondata['location']) +"', 'retries': "+
-        #                    str(jsondata['retries'])+", 'retrieveDate':'"+str(jsondata['retrieveDate'])+
-        #                    "', 'retryInterval':"+str(jsondata['retryInterval'])+"}"}
-        # await utils.save_log(data)
 
     @on(Action.FirmwareStatusNotification)
     async def on_firmware_status_notification(self, status):
         return call_result.FirmwareStatusNotificationPayload()
 
-    # @after(Action.FirmwareStatusNotification)
-    # async def after_firmware_status_notification(self, status):
-    #     # print(self.call.unique_id)
-    #     data = {"charger_id": self.id,
-    #             "unique_id": '',
-    #             "action": "FirmwareStatusNotification",
-    #             "content": "{'status': '" + str(status) + "'}"}
-    #     await utils.save_log(data)
     async def remote_start_transaction(self):
         request = call.RemoteStartTransactionPayload(
             id_tag='1'

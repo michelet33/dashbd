@@ -8,6 +8,7 @@ Need to install library pyftpdlib
 
 ## How to install FTP server
 python -m pyftpdlib -w --user=userftp --password=pwdftp
+python -m pyftpdlib -i 192.168.1.129 -w --user=userftp --password=pwdftp
 
 ## Test FTP
 Use application like FileZilla to test connexion.

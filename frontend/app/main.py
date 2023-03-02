@@ -108,6 +108,20 @@ async def get_html():
                     input.value = '';
                     event.preventDefault();
                 }
+                
+                var selectElement = document.getElementById("Protocol");
+                
+                selectElement.addEventListener("change", (event) => {
+                  var selectobject = document.getElementById("RequestType");
+                  var nb = selectobject.length
+                  while (selectobject.options.length > 0) {
+                        selectobject.remove(0);
+                    }
+                  let newOption = new Option('','');
+                  selectobject.add(newOption,undefined);
+                  
+                });
+                
             </script>
         </body>
     </html>
