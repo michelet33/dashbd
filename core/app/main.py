@@ -20,9 +20,6 @@ app.add_middleware(
 )
 load_dotenv('.env')
 
-
-app = FastAPI()
-
 # TODO to avoid csrftokenError
 
 app.include_router(auth)
