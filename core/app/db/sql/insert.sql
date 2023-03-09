@@ -15,7 +15,7 @@ values
 ,('DataTransfer','',11,1, true)
 ,('GetCompositeSchedule','',12,1, true)
 ,('GetConfiguration','{"key":[]}',13,1, true)
-,('GetDiagnostics','',14,1, true)
+,('GetDiagnostics','{"location":"", "retries":1, "retryInterval":0, "startTime":"", "stopTime":""}',14,1, true)
 ,('GetLocalListVersion','',15,1, true)
 ,('ReserveNow','',16,1, true)
 ,('Reset','',17,1, true)
