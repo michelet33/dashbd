@@ -1,0 +1,1 @@
+> docker run -p 192.168.1.129:22:22 -d atmoz/sftp foo:pass:::upload
