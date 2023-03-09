@@ -28,10 +28,14 @@ class ChargePoint16(CP):
         await super().route_message(raw_msg)
         # print(raw_msg)
         message = unpack(raw_msg)
+        action = ""
+        if message.message_type_id==3:
+            action = message.action
+
         data = {"charger_id": self.id,
                 "message_type_id": message.message_type_id,
                 "unique_id": message.unique_id,
-                "action": message.action,
+                "action": action,
                 "content": str(message.payload)}
         await utils.save_log(data)
 
@@ -52,6 +56,18 @@ class ChargePoint16(CP):
             status=RegistrationStatus.accepted
         )
 
+    @after(Action.BootNotification)
+    async def after_boot_notification(self, charge_point_vendor, charge_point_model, **kwargs):
+        # print(kwargs)
+        if len(kwargs) > 0:
+            data = kwargs
+            data["firmware_version"] = data["firmwareVersion"]
+            data.pop("firmwareVersion")
+        data["charge_point_vendor"] = charge_point_vendor
+        data["charge_point_model"] = charge_point_model
+        data["charge_id"] = self.id
+        await utils.save_charger(data)
+
     @on(Action.Heartbeat)
     async def on_heartbeat(self):
         return call_result.HeartbeatPayload(
@@ -67,6 +83,22 @@ class ChargePoint16(CP):
             }
         )
 
+    @after(Action.Authorize)
+    async def after_authorize(self, id_tag):
+        # check user price with id_tag, vendorid
+        data={}
+        id_token = 1
+        request = call.DataTransferPayload(
+            vendor_id="SetUserPrice",
+            message_id=id_token,
+            data=data
+        )
+        response = await self.call(request)
+
+
+    @on(Action.DiagnosticsStatusNotification)
+    async def on_diagnostics_status_notification(self, status):
+        return call_result.DiagnosticsStatusNotificationPayload()
     @on(Action.StartTransaction)
     async def on_start_transaction(self, connector_id, id_tag, timestamp, meter_start, reservation_id):
         return call_result.StartTransactionPayload(
@@ -94,6 +126,10 @@ class ChargePoint16(CP):
             status='Accepted'
         )
 
+    @on(Action.FirmwareStatusNotification)
+    async def on_firmware_status_notification(self, status):
+        return call_result.FirmwareStatusNotificationPayload()
+
     async def send_update_firmware(self, data):
         jsondata = json.loads(data)
         request = call.UpdateFirmwarePayload(
@@ -103,27 +139,104 @@ class ChargePoint16(CP):
             retry_interval = jsondata['retryInterval']
         )
         # datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S') + "Z"
-        logging.info('UPDATE FIRMWARE step 2')
         logging.info(request)
-        await self.call(request)
+        response = await self.call(request)
+        d = {}
+        if response:
+            # for setting in response.configuration_key:
+            #     print(f"{setting['key']}: {setting['value']}")
+            #     d = f"{setting['key']}: {setting['value']}"
+            d = response
+        return d
 
-    @on(Action.FirmwareStatusNotification)
-    async def on_firmware_status_notification(self, status):
-        return call_result.FirmwareStatusNotificationPayload()
+    async def send_change_configuration(self, data):
+        # print(data)
+        if data is dict:
+            jsondata= json.dumps(data)
+        else:
+            jsondata = json.loads(data)
+        # print(jsondata['value'])
+        request = call.ChangeConfigurationPayload(
+            key=jsondata['key'],
+            value=jsondata['value']
+        )
+        logging.info(request)
+        response = await self.call(request)
+        d = ""
+        if response:
+            d = response.status
+        return d
 
-    async def remote_start_transaction(self):
+    async def send_get_configuration(self, data):
+        jsondata = json.loads(data)
+        if 'key' in jsondata.keys():
+            request = call.GetConfigurationPayload(
+                key=jsondata['key']
+            )
+            logging.info(request)
+            response = await self.call(request)
+            d = {}
+            if response:
+                for setting in response.configuration_key:
+                    print(f"{setting['key']}: {setting['value']}")
+                    d = {'charger_id': self.id,'connectors':setting['value']}
+                await utils.save_charger(d)
+            return d
+        else:
+            logging.error(f"No attribut 'key' in : {jsondata}")
+
+    async def send_remote_start_transaction(self, data):
+        jsondata = json.loads(data)
         request = call.RemoteStartTransactionPayload(
-            id_tag='1'
+            connector_id=jsondata['connectorId'],
+            id_tag=jsondata['IdTag']
         )
         response = await self.call(request)
         if response.status == RemoteStartStopStatus.accepted:
             print("Transaction Started!!!")
+        return response
 
-    async def remote_stop_transaction(self):
+    async def send_remote_stop_transaction(self, data):
+        jsondata = json.loads(data)
         request = call.RemoteStopTransactionPayload(
-            transaction_id=1
+            transaction_id=jsondata['transactionId']
         )
         response = await self.call(request)
 
         if response.status == RemoteStartStopStatus.accepted:
             print("Stopping transaction")
+        return response
+    async def send_reset(self, data):
+        jsondata = json.loads(data)
+        if jsondata['type'] in ('Hard', 'Soft'):
+            print('--reset : ' + jsondata['type'])
+            return call.ResetPayload(
+                type=jsondata['type']
+            )
+            response = await self.call(request)
+
+            print('--reset : ' + jsondata['type'])
+            return response
+        else:
+            logging.error(f"type is not Hard or Soft: {jsondata['type']}")
+            return f"type is not Hard or Soft: {jsondata['type']}"
+
+    async def send_get_diagnostics(self, data):
+        print(data)
+        jsondata = json.loads(data)
+        request = call.GetDiagnosticsPayload(
+            location=jsondata['location']
+            , retries=jsondata['retries']
+            , retry_interval=jsondata['retryInterval']
+            , start_time=jsondata['startTime']
+            , stop_time=jsondata['stopTime']
+        )
+        d = ""
+        try:
+            response = await self.call(request)
+            if response:
+                d = f"'fileName':'{response.file_name}'"
+        except Exception:
+            d="error on response"
+        finally:
+            return d

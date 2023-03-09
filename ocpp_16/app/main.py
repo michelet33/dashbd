@@ -1,4 +1,5 @@
 # coding: utf-8
+# import html
 import json
 import os
 import logging
@@ -9,7 +10,7 @@ from fastapi import FastAPI, WebSocket, Depends
 from models.Central_System import CentralSystem
 from models.Charge_Point_16 import ChargePoint16
 from ocpp.v16 import call
-from ocpp.v16.enums import MessageTrigger
+from ocpp.v16.enums import MessageTrigger, Action
 import requests
 
 app = FastAPI()
@@ -48,44 +49,44 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         # use the register_charger funtion to save the charge point class based websocket instance.
         queue = await csms.register_charger(cp)
         # save
-        status = [MessageTrigger.status_notification,
-                  MessageTrigger.firmware_status_notification,
-                  MessageTrigger.diagnostics_status_notification,
-                  MessageTrigger.firmware_status_notification,
-                  MessageTrigger.boot_notification,
-                  MessageTrigger.meter_values]
-        for s in status:
-            request = call.TriggerMessagePayload(
-                requested_message=s
-            )
-            await cp.call(request)
+        # status = [MessageTrigger.status_notification,
+        #           MessageTrigger.firmware_status_notification,
+        #           MessageTrigger.diagnostics_status_notification,
+        #           MessageTrigger.firmware_status_notification,
+        #           MessageTrigger.boot_notification,
+        #           MessageTrigger.meter_values]
+        # for s in status:
+        #     request = call.TriggerMessagePayload(
+        #         requested_message=s
+        #     )
+        #     await cp.call(request)
         await queue.get()
 
-@app.websocket("/ws")
-async def websocket_frontendpoint(websocket: WebSocket):
-    # await websocket.accept()
-    await websocket.accept(subprotocol='ocpp1.6')
-    while True:
-        data = await websocket.receive_text()
-        logging.info(data)
-        data = json.loads(data)
-        logging.info(data)
-        chargers = csms.get_chargers()
-        logging.info(csms)
-        logging.info(chargers.items)
-        for cp, task in chargers.items():
-            logging.info(data["charger"])
-            logging.info(cp.id)
-            if cp.id == data["charger"]:
-                logging.info('UPDATE FIRMWARE step1')
-                logging.info(data['content'])
-                await cp.send_update_firmware(data['content'])
-                await websocket.send_text(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {data['action']}: "
-                                          f"{data['content']}")
-                break
+# @app.websocket("/ws")
+# async def websocket_frontendpoint(websocket: WebSocket):
+#     # await websocket.accept()
+#     await websocket.accept(subprotocol='ocpp1.6')
+#     while True:
+#         data = await websocket.receive_text()
+#         logging.info(data)
+#         data = json.loads(data)
+#         logging.info(data)
+#         chargers = csms.get_chargers()
+#         logging.info(csms)
+#         logging.info(chargers.items)
+#         for cp, task in chargers.items():
+#             logging.info(data["charger"])
+#             logging.info(cp.id)
+#             if cp.id == data["charger"]:
+#                 logging.info('UPDATE FIRMWARE step1')
+#                 logging.info(data['content'])
+#                 await cp.send_update_firmware(data['content'])
+#                 await websocket.send_text(f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} - {data['action']}: "
+#                                           f"{data['content']}")
+#                 break
 
-@app.websocket("/ws2")
-async def websocket_robotfw(websocket: WebSocket):
+@app.websocket("/ws2/{client_id}")
+async def websocket_client(websocket: WebSocket):
     await websocket.accept()
     # await websocket.accept(subprotocol='ocpp1.6')
     while True:
@@ -101,8 +102,20 @@ async def websocket_robotfw(websocket: WebSocket):
             if cp.id == data['charger']:
                 logging.info('UPDATE FIRMWARE step1')
                 logging.info(data['content'])
-                await cp.send_update_firmware(data['content'])
-                await websocket.send_text("Accepted")
+                if data['action'] == Action.UpdateFirmware:
+                    response= await cp.send_update_firmware(data['content'])
+                if data['action'] == Action.ChangeConfiguration:
+                    response= await cp.send_change_configuration(data['content'])
+                if data['action'] == Action.GetConfiguration:
+                    response= await cp.send_get_configuration(data['content'])
+                if data['action'] == Action.RemoteStartTransaction:
+                    response= await cp.send_remote_start_transaction(data['content'])
+                if data['action'] == Action.GetDiagnostics:
+                    response= await cp.send_get_diagnostics(data['content'])
+                try:
+                    await websocket.send_text(json.dumps(f"{data['action']}.conf({response})"))
+                except Exception:
+                    await websocket.send_text('error occuring')
                 break
     await websockets.connection.CLOSED
 
@@ -110,7 +123,6 @@ async def websocket_robotfw(websocket: WebSocket):
 async def startup_event():
     # print('startup')
     LOGIN_ENDPOINT = "http://192.168.1.129:5000/"
-    # LOGIN_ENDPOINT = "http://127.0.0.1:5000/"
     url = os.path.join(LOGIN_ENDPOINT, 'chargers/invalid/')
     requests.packages.urllib3.disable_warnings()
     response = requests.post(
@@ -120,7 +132,6 @@ async def startup_event():
     )
     response.raise_for_status()
     # print(response.content)
-
 
 
 if __name__ == '__main__':

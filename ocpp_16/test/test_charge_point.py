@@ -1,7 +1,7 @@
 import asyncio
 import os.path
-
-from ocpp.routing import on
+import ftplib
+from ocpp.routing import on, after
 from ocpp.v16.enums import RegistrationStatus
 import logging
 import websockets
@@ -12,6 +12,7 @@ logging.getLogger('ocpp').setLevel(level=logging.DEBUG)
 logging.getLogger('ocpp').addHandler(logging.StreamHandler())
 import shutil
 import urllib.request
+from urllib.parse import urlparse
 from contextlib import closing
 
 class ChargePoint(CP):
@@ -30,20 +31,64 @@ class ChargePoint(CP):
 
     @on(Action.UpdateFirmware)
     async def on_update_firmware(self, location:str, retries:int, retrieve_date:str, retry_interval:int):
-        await download_file_ftp(location)
+        await self.download_file_ftp(location)
 
         return call_result.UpdateFirmwarePayload()
 
-async def download_file_ftp(url):
-    filename = os.path.basename(url)
-    path_dest = os.getcwd()
-    print('----------------debut download-------------')
-    print(path_dest)
-    p = os.path.join(path_dest, filename)
-    with closing(urllib.request.urlopen(url)) as r:
-        with open(p, 'wb') as f:
-            shutil.copyfileobj(r, f)
-    print('----------------fin download-------------')
+    @on(Action.GetDiagnostics)
+    async def on_get_diagnostics(self, location:str, retries:int, retry_interval:int, start_time:str, stop_time:str):
+        return call_result.GetDiagnosticsPayload('test.zip')
+
+    @after(Action.GetDiagnostics)
+    async def after_get_diagnostics(self, location:str, retries:int, retry_interval:int, start_time:str, stop_time:str):
+        file = r'C:\Users\mta\Downloads\evbb\test.zip'
+        parsed = urlparse(location)
+        print(parsed)
+        login_pwd = parsed.netloc.split('@')[0]
+        login = login_pwd.split(':')[0]
+        password = login_pwd.split(':')[1]
+        ip_port = parsed.netloc.split('@')[1]
+        ip = ip_port.split(':')[0]
+        port = ip_port.split(':')[1]
+        if parsed.scheme == 'ftp':
+
+            ftp = ftplib.FTP()
+            ftp.connect(ip, int(port))
+            ftp.login(login, password)
+            ftp.cwd(parsed.path)
+        if parsed.scheme == 'ftps':
+            # ip_port = parsed.netloc
+            # ip = ip_port.split(':')[0]
+            # port = ip_port.split(':')[1]
+            ftp = ftplib.FTP_TLS()
+            ftp.connect(ip, int(port))
+            ftp.auth()
+            ftp.prot_p()
+            resp = ftp.login(login,password)
+            if resp:
+                print(resp)
+            ftp.cwd(parsed.path)
+        await self.upload(ftp, file)
+        ftp.quit()
+    async def upload(self, ftp, file):
+        print(file)
+        fileName = os.path.basename(file)
+        ext = os.path.splitext(file)[1]
+        if ext in (".txt", ".htm", ".html"):
+            ftp.storlines(f"STOR {fileName}", open(file))
+        else:
+            ftp.storbinary(f"STOR {fileName}", open(file, "rb"))
+
+    async def download_file_ftp(self, url):
+        filename = os.path.basename(url)
+        path_dest = os.getcwd()
+        print('----------------debut download-------------')
+        print(path_dest)
+        p = os.path.join(path_dest, filename)
+        with closing(urllib.request.urlopen(url)) as r:
+            with open(p, 'wb') as f:
+                shutil.copyfileobj(r, f)
+        print('----------------fin download-------------')
 
 async def main():
     """The charge point sends a boot notification to the central system at boot,
