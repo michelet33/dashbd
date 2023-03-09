@@ -1,10 +1,25 @@
 # coding: utf-8
+import os
 import json
+import datetime
 from pyftpdlib.servers import FTPServer
-from pyftpdlib.handlers import FTPHandler
-from pyftpdlib.authorizers import DummyAuthorizer
+from pyftpdlib.handlers import FTPHandler, ThrottledDTPHandler
+if os.name == 'nt':
+    from pyftpdlib.authorizers import DummyAuthorizer
+else:
+    from pyftpdlib.authorizers import UnixAuthorizer
+    from pyftpdlib.filesystems import UnixFilesystem
 import requests
+import logging
 
+now = datetime.datetime.now()
+file = now.strftime("%Y%m%d")
+filename= os.path.join(os.getcwd(), f'log/ftp_{file}.log')
+logging.basicConfig(filename=filename,
+                    filemode='a',
+                    format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                    datefmt='%H:%M:%S',
+                    level=logging.DEBUG)
 
 LOGIN_ENDPOINT = "http://192.168.1.129:5000"
 
@@ -53,15 +68,29 @@ class MyHandler(FTPHandler):
 
     def on_incomplete_file_sent(self, file):
         msg = f'Package {file} incompletely sended'
+        logging.error(msg)
         save_logs(msg)
 
 def main():
     address = ('192.168.1.129', 2121)
-    authorizer = DummyAuthorizer()
-    authorizer.add_user('userftp', 'pwdftp', r'C:\projets\python\dashbd\ftp\packages', perm="elr",
+    if os.name == 'nt':
+        authorizer = DummyAuthorizer()
+    else:
+        authorizer = UnixAuthorizer(rejected_users=["root"], require_valid_shell=True)
+
+    authorizer.add_user('userftp', 'pwdftp', '.', perm="elradfmwMT",
                        msg_login="Login successful", msg_quit="Goodbye")
     handler=  MyHandler
     handler.authorizer = authorizer
+    if os.name != 'nt':
+        handler.abstracted_fs = UnixFilesystem
+
+    # set limit upload and download
+    # dtp_handler = ThrottledDTPHandler
+    # dtp_handler.read_limit = 30720  # 30 Kb/sec (30 * 1024)
+    # dtp_handler.write_limit = 30720
+    # handler.dtp_handler = dtp_handler
+
     with FTPServer(address, handler) as server:
         server.serve_forever(handle_exit=True)
 
